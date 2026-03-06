@@ -1,7 +1,7 @@
-# Use official Python 3.11 image (or 3.14 if available)
+# Use official Python 3.11 slim image
 FROM python:3.11-slim
 
-# Set workdir
+# Set working directory
 WORKDIR /app
 
 # Install system dependencies for Playwright
@@ -26,21 +26,24 @@ RUN apt-get update && apt-get install -y \
     xdg-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements
+# Copy requirements.txt first (Docker layer caching)
 COPY requirements.txt .
 
-# Install Python dependencies
+# Upgrade pip and install Python dependencies
 RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Playwright browsers
+# Install Playwright browsers with dependencies
 RUN playwright install --with-deps
 
 # Copy bot code
 COPY . .
 
-# Set environment variables (optional, can also set in Render)
+# Expose port if needed (optional, for webhooks)
+# EXPOSE 8080
+
+# Set environment variables (can also set in Render)
 # ENV TELEGRAM_BOT_TOKEN=your_bot_token_here
 
-# Run bot
+# Run the bot
 CMD ["python", "bot.py"]
