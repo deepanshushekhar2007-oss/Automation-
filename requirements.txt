@@ -1,14 +1,5 @@
-aiogram
+aiogram==3.4.1
 aiofiles==23.2.1
 psutil==5.9.8
 uvloop==0.19.0
 python-dotenv==1.0.1
-telethon
-pyrogram
-tgcrypto
-requests
-httpx
-flask
-fastapi
-uvicorn
-pytz
