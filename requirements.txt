@@ -1,4 +1,6 @@
 aiogram
+aiohttp
 aiofiles
 psutil
+flask
 python-dotenv
