@@ -1,4 +1,4 @@
 aiogram
-aiofiles==23.2.1
-psutil==5.9.8
-python-dotenv==1.0.1
+aiofiles
+psutil
+python-dotenv
