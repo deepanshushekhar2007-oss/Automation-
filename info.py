@@ -8,7 +8,7 @@ from aiogram.types import (
     Message, ReplyKeyboardMarkup, KeyboardButton,
     InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 )
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandStart, Command
 from aiogram.client.default import DefaultBotProperties
 import html
 
@@ -331,7 +331,7 @@ async def adhar_mode(message: Message):
     await message.answer("📝 Send Aadhar number:")
 
 # ================= COMMAND HANDLERS =================
-@dp.message(F.command("num"))
+@dp.message(Command("num"))
 async def cmd_num(message: Message):
     global total_queries
     try:
@@ -346,8 +346,8 @@ async def cmd_num(message: Message):
                 ]
             )
             return
-        args = message.text.split(maxsplit=1)
-        args = args[1].strip() if len(args) > 1 else ""
+        parts = message.text.split(maxsplit=1)
+        args = parts[1].strip() if len(parts) > 1 else ""
         if not args:
             await message.answer("Usage: /num <phone_number>")
             return
@@ -381,11 +381,12 @@ async def cmd_num(message: Message):
         print("NUM command error:", e)
         await message.answer("❌ Error fetching number info!")
 
-@dp.message(F.command("tg"))
+@dp.message(Command("tg"))
 async def cmd_tg(message: Message):
     global total_queries
     from telethon.errors import UsernameNotOccupiedError, UsernameInvalidError, PeerIdInvalidError
-    user_input = (message.get_args() or "").strip()
+    _parts = message.text.split(maxsplit=1)
+    user_input = _parts[1].strip() if len(_parts) > 1 else ""
     if not await check_force_sub(message.from_user.id):
         styled_send(
             message.chat.id,
@@ -466,10 +467,11 @@ async def cmd_tg(message: Message):
         except:
             pass
 
-@dp.message(F.command("adhar"))
+@dp.message(Command("adhar"))
 async def cmd_adhar(message: Message):
     global total_queries
-    args = (message.get_args() or "").strip()
+    _parts = message.text.split(maxsplit=1)
+    args = _parts[1].strip() if len(_parts) > 1 else ""
     if not args:
         await message.answer("Usage: /adhar <adhar_number>")
         return
@@ -526,7 +528,7 @@ async def cmd_adhar(message: Message):
             pass
 
 # ================= ADMIN COMMAND =================
-@dp.message(F.command("admin"))
+@dp.message(Command("admin"))
 async def cmd_admin(message: Message):
     try:
         if message.from_user.id != OWNER_ID:
