@@ -25,6 +25,7 @@ API_ID = int(os.getenv("API_ID", "0"))
 API_HASH = os.getenv("API_HASH", "")
 STRING_SESSION = os.getenv("STRING_SESSION", "")
 
+# Mutable API URLs — admin can change these at runtime
 NUMBER_API = os.getenv("NUMBER_API", "https://ayaanmods.site/number.php?key=annonymous&number=")
 TG_API     = os.getenv("TG_API",     "https://ayaanmods.site/tg2num.php?key=annonymoustgtonum&id=")
 ADHAR_API  = os.getenv("ADHAR_API",  "https://ayaanmods.site/family.php?key=annonymousfamily&term=")
@@ -46,9 +47,8 @@ tg_client = TelegramClient(
     retry_delay=5, request_retries=5, flood_sleep_threshold=60
 )
 
-# ================= STYLED BUTTON HELPERS =================
-# Telegram new colored buttons (primary=blue, success=green, danger=red)
-# via direct Bot API (aiogram doesn't support 'style' field natively yet)
+# ================= STYLED BOT API HELPERS =================
+# Uses direct Bot API to support Telegram colored inline buttons (style field)
 
 def styled_send(chat_id, text, rows, parse_mode="HTML"):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
@@ -76,6 +76,25 @@ def styled_edit(chat_id, message_id, text, rows, parse_mode="HTML"):
         requests.post(url, json=payload, timeout=10)
     except Exception as e:
         print("styled_edit error:", e)
+
+# ================= REPLY KEYBOARD =================
+# Colored reply keyboard using request_contact-style KeyboardButton with custom color
+# aiogram uses ReplyKeyboardMarkup; Telegram Bot API 7.0+ supports button colors via web_app / etc.
+# For the classic reply keyboard we style using emoji + text combos with a vibrant layout.
+
+kb = ReplyKeyboardMarkup(
+    keyboard=[
+        [
+            KeyboardButton(text="🔵 Number Lookup"),
+            KeyboardButton(text="🟢 TG to Number")
+        ],
+        [
+            KeyboardButton(text="🟠 Aadhar Info")
+        ]
+    ],
+    resize_keyboard=True,
+    input_field_placeholder="Choose a tool below 👇"
+)
 
 # ================= HELPERS =================
 async def check_force_sub(user_id):
@@ -115,15 +134,6 @@ def build_msg(data, header=""):
     msg += f"owner : @{OWNER_USERNAME}\n</code>"
     return msg
 
-# ================= REPLY KEYBOARD =================
-kb = ReplyKeyboardMarkup(
-    keyboard=[
-        [KeyboardButton(text="📱 Number Lookup"), KeyboardButton(text="🆔 TG to Number")],
-        [KeyboardButton(text="📝 Aadhar Info")]
-    ],
-    resize_keyboard=True
-)
-
 # ================= ADMIN PANEL HELPER =================
 def _admin_panel_text():
     uptime = datetime.now() - bot_start_time
@@ -150,8 +160,8 @@ def _admin_panel_rows():
             {"text": "📝 Aadhar Info",   "callback_data": "adm_adhar", "style": "primary"}
         ],
         [
-            {"text": "🌐 View APIs",     "callback_data": "adm_apis",      "style": "success"},
-            {"text": "📊 Bot Stats",     "callback_data": "adm_stats",     "style": "success"}
+            {"text": "🌐 View & Edit APIs", "callback_data": "adm_apis",  "style": "success"},
+            {"text": "📊 Bot Stats",        "callback_data": "adm_stats", "style": "success"}
         ],
         [
             {"text": "📢 Broadcast",     "callback_data": "adm_broadcast", "style": "danger"}
@@ -163,6 +173,40 @@ def send_admin_panel(chat_id):
 
 def edit_admin_panel(chat_id, message_id):
     styled_edit(chat_id, message_id, _admin_panel_text(), _admin_panel_rows())
+
+# ================= API VIEW PANEL =================
+def _api_view_text():
+    return (
+        "<b>🌐 Current API Configuration</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"📱 <b>Number API:</b>\n<code>{html.escape(NUMBER_API)}</code>\n\n"
+        f"🆔 <b>TG API:</b>\n<code>{html.escape(TG_API)}</code>\n\n"
+        f"📝 <b>Aadhar API:</b>\n<code>{html.escape(ADHAR_API)}</code>\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "💡 Tap a button below to change an API URL:"
+    )
+
+def _api_view_rows():
+    return [
+        [
+            {"text": "✏️ Change Number API",  "callback_data": "adm_set_num",   "style": "primary"},
+            {"text": "✏️ Change TG API",       "callback_data": "adm_set_tg",    "style": "primary"}
+        ],
+        [
+            {"text": "✏️ Change Aadhar API",   "callback_data": "adm_set_adhar", "style": "primary"}
+        ],
+        [
+            {"text": "🔄 Test Number API",  "callback_data": "adm_test_num",   "style": "success"},
+            {"text": "🔄 Test TG API",      "callback_data": "adm_test_tg",    "style": "success"}
+        ],
+        [
+            {"text": "🔄 Test Aadhar API",  "callback_data": "adm_test_adhar", "style": "success"}
+        ],
+        [{"text": "⬅️ Back to Panel", "callback_data": "adm_back", "style": "danger"}]
+    ]
+
+def send_api_view(chat_id, message_id):
+    styled_edit(chat_id, message_id, _api_view_text(), _api_view_rows())
 
 # ================= START =================
 @dp.message(CommandStart())
@@ -185,28 +229,19 @@ async def start(message: Message):
                 )
                 return
 
-            styled_send(
-                message.chat.id,
+            # Welcome message — no inline keyboard, only reply keyboard
+            await message.answer(
                 "<b>💗 SPIDY MULTI TOOL BOT 💗</b>\n\n"
                 "🚀 Welcome to the Advanced Multi Tool Bot\n"
                 "━━━━━━━━━━━━━━━━━━━━\n"
-                "📞 Number Lookup\n"
-                "🆔 TG to Number\n"
-                "🪪 Aadhar Info\n"
+                "🔵 Number Lookup\n"
+                "🟢 TG to Number\n"
+                "🟠 Aadhar Info\n"
                 "━━━━━━━━━━━━━━━━━━━━\n\n"
                 "⚡ Fast • Secure • Accurate\n\n"
                 "👇 Select an option below:",
-                [
-                    [
-                        {"text": "📱 Number Lookup", "callback_data": "mode_num",   "style": "primary"},
-                        {"text": "🆔 TG to Number",  "callback_data": "mode_tg",    "style": "primary"}
-                    ],
-                    [
-                        {"text": "📝 Aadhar Info",   "callback_data": "mode_adhar", "style": "primary"}
-                    ]
-                ]
+                reply_markup=kb
             )
-            await message.answer("Or use the keyboard below 👇", reply_markup=kb)
 
         else:
             await message.answer(
@@ -229,60 +264,25 @@ async def cb_check_join(callback: CallbackQuery):
     ok = await check_force_sub(callback.from_user.id)
     if ok:
         total_users.add(callback.from_user.id)
-        styled_edit(
+        # After joining, delete the inline message and send welcome with reply keyboard
+        try:
+            await callback.message.delete()
+        except:
+            pass
+        await bot.send_message(
             callback.message.chat.id,
-            callback.message.message_id,
             "<b>💗 SPIDY MULTI TOOL BOT 💗</b>\n\n"
             "✅ Successfully joined! Welcome aboard!\n"
             "━━━━━━━━━━━━━━━━━━━━\n\n"
             "👇 Select an option below:",
-            [
-                [
-                    {"text": "📱 Number Lookup", "callback_data": "mode_num",   "style": "primary"},
-                    {"text": "🆔 TG to Number",  "callback_data": "mode_tg",    "style": "primary"}
-                ],
-                [
-                    {"text": "📝 Aadhar Info",   "callback_data": "mode_adhar", "style": "primary"}
-                ]
-            ]
+            reply_markup=kb
         )
         await callback.answer("✅ Access granted! Welcome!")
     else:
         await callback.answer("❌ You haven't joined yet! Please join first.", show_alert=True)
 
-# ================= MODE SELECTION CALLBACKS =================
-@dp.callback_query(F.data == "mode_num")
-async def cb_mode_num(callback: CallbackQuery):
-    ok = await check_force_sub(callback.from_user.id)
-    if not ok:
-        await callback.answer("❌ Join the channel first!", show_alert=True)
-        return
-    user_mode[callback.from_user.id] = "number"
-    await callback.message.answer("📱 Send mobile number (10 digits):")
-    await callback.answer()
-
-@dp.callback_query(F.data == "mode_tg")
-async def cb_mode_tg(callback: CallbackQuery):
-    ok = await check_force_sub(callback.from_user.id)
-    if not ok:
-        await callback.answer("❌ Join the channel first!", show_alert=True)
-        return
-    user_mode[callback.from_user.id] = "tg"
-    await callback.message.answer("🆔 Send Telegram user ID or @username:")
-    await callback.answer()
-
-@dp.callback_query(F.data == "mode_adhar")
-async def cb_mode_adhar(callback: CallbackQuery):
-    ok = await check_force_sub(callback.from_user.id)
-    if not ok:
-        await callback.answer("❌ Join the channel first!", show_alert=True)
-        return
-    user_mode[callback.from_user.id] = "adhar"
-    await callback.message.answer("📝 Send Aadhar number:")
-    await callback.answer()
-
 # ================= REPLY KEYBOARD HANDLERS =================
-@dp.message(F.text == "📱 Number Lookup")
+@dp.message(F.text == "🔵 Number Lookup")
 async def number_mode(message: Message):
     ok = await check_force_sub(message.from_user.id)
     if not ok:
@@ -298,7 +298,7 @@ async def number_mode(message: Message):
     user_mode[message.from_user.id] = "number"
     await message.answer("📱 Send mobile number (10 digits):")
 
-@dp.message(F.text == "🆔 TG to Number")
+@dp.message(F.text == "🟢 TG to Number")
 async def tg_mode(message: Message):
     ok = await check_force_sub(message.from_user.id)
     if not ok:
@@ -314,7 +314,7 @@ async def tg_mode(message: Message):
     user_mode[message.from_user.id] = "tg"
     await message.answer("🆔 Send Telegram user ID or @username:")
 
-@dp.message(F.text == "📝 Aadhar Info")
+@dp.message(F.text == "🟠 Aadhar Info")
 async def adhar_mode(message: Message):
     ok = await check_force_sub(message.from_user.id)
     if not ok:
@@ -588,34 +588,67 @@ async def cb_adm_adhar(callback: CallbackQuery):
     )
     await callback.answer()
 
+# ================= API VIEW & EDIT =================
 @dp.callback_query(F.data == "adm_apis")
 async def cb_adm_apis(callback: CallbackQuery):
     if callback.from_user.id != OWNER_ID:
         await callback.answer("❌ Not authorized!", show_alert=True)
         return
-    text = (
-        "<b>🌐 Current API Configuration</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"📱 <b>Number API:</b>\n<code>{NUMBER_API}</code>\n\n"
-        f"🆔 <b>TG API:</b>\n<code>{TG_API}</code>\n\n"
-        f"📝 <b>Aadhar API:</b>\n<code>{ADHAR_API}</code>\n\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        "💡 To change APIs, update env vars:\n"
-        "<code>NUMBER_API</code>, <code>TG_API</code>, <code>ADHAR_API</code>"
-    )
+    send_api_view(callback.message.chat.id, callback.message.message_id)
+    await callback.answer()
+
+@dp.callback_query(F.data == "adm_set_num")
+async def cb_adm_set_num(callback: CallbackQuery):
+    if callback.from_user.id != OWNER_ID:
+        await callback.answer("❌ Not authorized!", show_alert=True)
+        return
+    admin_mode[callback.from_user.id] = "set_num_api"
     styled_edit(
-        callback.message.chat.id, callback.message.message_id, text,
-        [
-            [
-                {"text": "🔄 Test Number API",  "callback_data": "adm_test_num",   "style": "primary"},
-                {"text": "🔄 Test TG API",      "callback_data": "adm_test_tg",    "style": "primary"}
-            ],
-            [
-                {"text": "🔄 Test Aadhar API",  "callback_data": "adm_test_adhar", "style": "primary"}
-            ],
-            [{"text": "⬅️ Back to Panel", "callback_data": "adm_back", "style": "danger"}]
-        ]
+        callback.message.chat.id, callback.message.message_id,
+        "✏️ <b>Change Number API URL</b>\n\n"
+        f"Current:\n<code>{html.escape(NUMBER_API)}</code>\n\n"
+        "Send the new full URL (must end with the number param):",
+        [[{"text": "❌ Cancel", "callback_data": "adm_apis_refresh", "style": "danger"}]]
     )
+    await callback.answer()
+
+@dp.callback_query(F.data == "adm_set_tg")
+async def cb_adm_set_tg(callback: CallbackQuery):
+    if callback.from_user.id != OWNER_ID:
+        await callback.answer("❌ Not authorized!", show_alert=True)
+        return
+    admin_mode[callback.from_user.id] = "set_tg_api"
+    styled_edit(
+        callback.message.chat.id, callback.message.message_id,
+        "✏️ <b>Change TG API URL</b>\n\n"
+        f"Current:\n<code>{html.escape(TG_API)}</code>\n\n"
+        "Send the new full URL (must end with the ID param):",
+        [[{"text": "❌ Cancel", "callback_data": "adm_apis_refresh", "style": "danger"}]]
+    )
+    await callback.answer()
+
+@dp.callback_query(F.data == "adm_set_adhar")
+async def cb_adm_set_adhar(callback: CallbackQuery):
+    if callback.from_user.id != OWNER_ID:
+        await callback.answer("❌ Not authorized!", show_alert=True)
+        return
+    admin_mode[callback.from_user.id] = "set_adhar_api"
+    styled_edit(
+        callback.message.chat.id, callback.message.message_id,
+        "✏️ <b>Change Aadhar API URL</b>\n\n"
+        f"Current:\n<code>{html.escape(ADHAR_API)}</code>\n\n"
+        "Send the new full URL (must end with the term/number param):",
+        [[{"text": "❌ Cancel", "callback_data": "adm_apis_refresh", "style": "danger"}]]
+    )
+    await callback.answer()
+
+@dp.callback_query(F.data == "adm_apis_refresh")
+async def cb_adm_apis_refresh(callback: CallbackQuery):
+    if callback.from_user.id != OWNER_ID:
+        await callback.answer("❌ Not authorized!", show_alert=True)
+        return
+    admin_mode.pop(callback.from_user.id, None)
+    send_api_view(callback.message.chat.id, callback.message.message_id)
     await callback.answer()
 
 @dp.callback_query(F.data == "adm_stats")
@@ -676,13 +709,13 @@ async def cb_adm_test(callback: CallbackQuery):
             return
         status = f"✅ Online (HTTP {r.status_code})" if r.status_code == 200 else f"❌ Error {r.status_code}"
     except Exception as e:
-        status = f"❌ Offline / Timeout"
+        status = "❌ Offline / Timeout"
     await callback.answer(f"API Status: {status}", show_alert=True)
 
 # ================= MAIN MESSAGE HANDLER =================
 @dp.message()
 async def handle_input(message: Message):
-    global total_queries
+    global total_queries, NUMBER_API, TG_API, ADHAR_API
 
     user_id  = message.from_user.id
     text     = (message.text or "").strip()
@@ -695,6 +728,59 @@ async def handle_input(message: Message):
     adm_mode = admin_mode.get(user_id)
     if adm_mode and user_id == OWNER_ID:
         try:
+            # ---- API URL CHANGE HANDLERS ----
+            if adm_mode == "set_num_api":
+                if text.startswith("http"):
+                    NUMBER_API = text
+                    await message.answer(f"✅ <b>Number API updated!</b>\n\n<code>{html.escape(NUMBER_API)}</code>")
+                else:
+                    await message.answer("❌ Invalid URL! Must start with http.")
+                admin_mode.pop(user_id, None)
+                styled_send(
+                    message.chat.id,
+                    "🌐 <b>APIs updated. What next?</b>",
+                    [
+                        [{"text": "🌐 Back to APIs", "callback_data": "adm_apis_refresh", "style": "success"}],
+                        [{"text": "👑 Admin Panel",  "callback_data": "adm_back",         "style": "primary"}]
+                    ]
+                )
+                return
+
+            elif adm_mode == "set_tg_api":
+                if text.startswith("http"):
+                    TG_API = text
+                    await message.answer(f"✅ <b>TG API updated!</b>\n\n<code>{html.escape(TG_API)}</code>")
+                else:
+                    await message.answer("❌ Invalid URL! Must start with http.")
+                admin_mode.pop(user_id, None)
+                styled_send(
+                    message.chat.id,
+                    "🌐 <b>APIs updated. What next?</b>",
+                    [
+                        [{"text": "🌐 Back to APIs", "callback_data": "adm_apis_refresh", "style": "success"}],
+                        [{"text": "👑 Admin Panel",  "callback_data": "adm_back",         "style": "primary"}]
+                    ]
+                )
+                return
+
+            elif adm_mode == "set_adhar_api":
+                if text.startswith("http"):
+                    ADHAR_API = text
+                    await message.answer(f"✅ <b>Aadhar API updated!</b>\n\n<code>{html.escape(ADHAR_API)}</code>")
+                else:
+                    await message.answer("❌ Invalid URL! Must start with http.")
+                admin_mode.pop(user_id, None)
+                styled_send(
+                    message.chat.id,
+                    "🌐 <b>APIs updated. What next?</b>",
+                    [
+                        [{"text": "🌐 Back to APIs", "callback_data": "adm_apis_refresh", "style": "success"}],
+                        [{"text": "👑 Admin Panel",  "callback_data": "adm_back",         "style": "primary"}]
+                    ]
+                )
+                return
+
+            # ---- LOOKUP HANDLERS ----
             if adm_mode == "adm_number":
                 r = requests.get(NUMBER_API + text, timeout=15)
                 result = r.json().get("result", [])
