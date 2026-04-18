@@ -25,7 +25,7 @@ API_HASH = os.getenv("API_HASH", "")
 STRING_SESSION = os.getenv("STRING_SESSION", "")
 
 # Mutable API URLs — admin can change these at runtime
-NUMBER_API = os.getenv("NUMBER_API", "https://ayaanmods.site/number.php?key=annonymous&number=")
+NUMBER_API = os.getenv("NUMBER_API", "https://cyber-osint-num-infos.vercel.app/api/numinfo?key=Anonymous&num=")
 TG_API     = os.getenv("TG_API",     "https://ayaanmods.site/tg2num.php?key=annonymoustgtonum&id=")
 ADHAR_API  = os.getenv("ADHAR_API",  "https://ayaanmods.site/family.php?key=annonymousfamily&term=")
 
@@ -195,6 +195,44 @@ def build_msg(data, header=""):
                 msg += f"{safe_val(k)} : {safe_val(v)}\n"
     else:
         msg += safe_val(data) + "\n"
+    msg += f"owner : @{OWNER_USERNAME}\n</code>"
+    return msg
+
+def parse_num_response(data, header="💗 SPIDY NUMBER LOOKUP 💗"):
+    # Skip non-data keys from output
+    SKIP_KEYS = {"Owner", "status", "Dm to buy access", "API_Developer", "channel_name", "channel_link"}
+    # Check status field if present
+    if "status" in data and not data["status"]:
+        err = data.get("results") or data.get("result") or "No Data Found"
+        if isinstance(err, str):
+            return f"❌ <b>{html.escape(err)}</b>"
+    # Try both "results" and "result" keys
+    results = data.get("results") or data.get("result")
+    if not results:
+        return "❌ No Data Found"
+    msg = f"<b>{html.escape(header)}</b>\n━━━━━━━━━━━━━━━\n<code>"
+    if isinstance(results, list):
+        seen = set()
+        for item in results:
+            if isinstance(item, dict):
+                for k, v in item.items():
+                    if k in SKIP_KEYS:
+                        continue
+                    val = str(v).strip() if v else ""
+                    line = f"{k} : {val}"
+                    if val and line not in seen:
+                        msg += f"{html.escape(k)} : {html.escape(val)}\n"
+                        seen.add(line)
+                msg += "─────────────\n"
+    elif isinstance(results, dict):
+        for k, v in results.items():
+            if k in SKIP_KEYS:
+                continue
+            val = str(v).strip() if v else ""
+            if val:
+                msg += f"{html.escape(k)} : {html.escape(val)}\n"
+    else:
+        msg += html.escape(str(results)) + "\n"
     msg += f"owner : @{OWNER_USERNAME}\n</code>"
     return msg
 
@@ -420,18 +458,7 @@ async def cmd_num(message: Message):
         except:
             await message.answer("❌ API Error! Try again.")
             return
-        msg = "<code>"
-        result = data.get("result", [])
-        if isinstance(result, list) and result:
-            for item in result:
-                if isinstance(item, dict):
-                    for k, v in item.items():
-                        if v:
-                            msg += f"{html.escape(str(k))} : {html.escape(str(v))}\n"
-            msg += "owner : @SPIDYWS\n"
-        else:
-            msg += "No Data Found\nowner : @SPIDYWS\n"
-        msg += "</code>"
+        msg = parse_num_response(data, "💗 SPIDY NUMBER LOOKUP 💗")
         total_queries += 1
         sent = await message.answer(msg)
         if message.chat.type in ["group", "supergroup"]:
@@ -857,8 +884,7 @@ async def handle_input(message: Message):
             # ---- LOOKUP HANDLERS ----
             if adm_mode == "adm_number":
                 r = requests.get(NUMBER_API + text, timeout=15)
-                result = r.json().get("result", [])
-                msg = build_msg(result, "👑 ADMIN — NUMBER LOOKUP") if result else "❌ No Data Found"
+                msg = parse_num_response(r.json(), "👑 ADMIN — NUMBER LOOKUP")
                 await message.answer(msg)
                 total_queries += 1
 
@@ -967,12 +993,7 @@ async def handle_input(message: Message):
 
         if mode == "number":
             r = requests.get(NUMBER_API + text, timeout=15)
-            result = r.json().get("result", [])
-            if not result:
-                await message.answer("❌ No Data Found")
-                user_mode.pop(user_id, None)
-                return
-            msg = build_msg(result, "💗 SPIDY NUMBER LOOKUP 💗")
+            msg = parse_num_response(r.json(), "💗 SPIDY NUMBER LOOKUP 💗")
 
         elif mode == "tg":
             uid_r, uname_r = await resolve_username(text)
