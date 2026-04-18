@@ -5,8 +5,7 @@ import os
 from datetime import datetime
 from aiogram import Bot, Dispatcher, F
 from aiogram.types import (
-    Message, ReplyKeyboardMarkup, KeyboardButton,
-    InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+    Message, CallbackQuery
 )
 from aiogram.filters import CommandStart, Command
 from aiogram.client.default import DefaultBotProperties
@@ -29,6 +28,75 @@ STRING_SESSION = os.getenv("STRING_SESSION", "")
 NUMBER_API = os.getenv("NUMBER_API", "https://ayaanmods.site/number.php?key=annonymous&number=")
 TG_API     = os.getenv("TG_API",     "https://ayaanmods.site/tg2num.php?key=annonymoustgtonum&id=")
 ADHAR_API  = os.getenv("ADHAR_API",  "https://ayaanmods.site/family.php?key=annonymousfamily&term=")
+
+# ================= CONFIG PERSISTENCE =================
+CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "api_config.json")
+
+def load_config():
+    global NUMBER_API, TG_API, ADHAR_API
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r") as f:
+                cfg = json.load(f)
+            NUMBER_API = cfg.get("NUMBER_API", NUMBER_API)
+            TG_API     = cfg.get("TG_API",     TG_API)
+            ADHAR_API  = cfg.get("ADHAR_API",  ADHAR_API)
+            print("✅ API config loaded from file")
+        except Exception as e:
+            print("Config load error:", e)
+
+def save_config():
+    try:
+        with open(CONFIG_FILE, "w") as f:
+            json.dump({"NUMBER_API": NUMBER_API, "TG_API": TG_API, "ADHAR_API": ADHAR_API}, f, indent=2)
+        print("✅ API config saved to file")
+    except Exception as e:
+        print("Config save error:", e)
+
+def update_render_env(key, value):
+    render_api_key = os.getenv("RENDER_API_KEY", "")
+    render_service_id = os.getenv("RENDER_SERVICE_ID", "")
+    if not render_api_key or not render_service_id:
+        return False
+    try:
+        url = f"https://api.render.com/v1/services/{render_service_id}/env-vars"
+        headers = {
+            "Authorization": f"Bearer {render_api_key}",
+            "Accept": "application/json",
+            "Content-Type": "application/json"
+        }
+        # Get current env vars
+        get_r = requests.get(url, headers=headers, timeout=10)
+        if get_r.status_code != 200:
+            print("Render GET env error:", get_r.text[:200])
+            return False
+        current = get_r.json()
+        # Build updated list
+        updated_list = []
+        found = False
+        for item in current:
+            ev = item.get("envVar", {})
+            if ev.get("key") == key:
+                updated_list.append({"key": key, "value": value})
+                found = True
+            else:
+                updated_list.append({"key": ev.get("key"), "value": ev.get("value", "")})
+        if not found:
+            updated_list.append({"key": key, "value": value})
+        # PUT updated env vars
+        put_r = requests.put(url, json=updated_list, headers=headers, timeout=10)
+        if put_r.status_code in [200, 201]:
+            print(f"✅ Render env '{key}' updated")
+            return True
+        else:
+            print("Render PUT env error:", put_r.text[:200])
+            return False
+    except Exception as e:
+        print("Render API error:", e)
+        return False
+
+# Load saved config on startup (overrides env vars if file exists)
+load_config()
 
 # ================= STATS =================
 bot_start_time = datetime.now()
@@ -77,24 +145,17 @@ def styled_edit(chat_id, message_id, text, rows, parse_mode="HTML"):
     except Exception as e:
         print("styled_edit error:", e)
 
-# ================= REPLY KEYBOARD =================
-# Colored reply keyboard using request_contact-style KeyboardButton with custom color
-# aiogram uses ReplyKeyboardMarkup; Telegram Bot API 7.0+ supports button colors via web_app / etc.
-# For the classic reply keyboard we style using emoji + text combos with a vibrant layout.
-
-kb = ReplyKeyboardMarkup(
-    keyboard=[
+# ================= MAIN MENU ROWS (colored inline buttons) =================
+def _main_menu_rows():
+    return [
         [
-            KeyboardButton(text="🔵 Number Lookup"),
-            KeyboardButton(text="🟢 TG to Number")
+            {"text": "📱 Number Lookup", "callback_data": "mode_num", "style": "primary"},
+            {"text": "🆔 TG to Number",  "callback_data": "mode_tg",  "style": "success"}
         ],
         [
-            KeyboardButton(text="🟠 Aadhar Info")
+            {"text": "📝 Aadhar Info", "callback_data": "mode_adhar", "style": "danger"}
         ]
-    ],
-    resize_keyboard=True,
-    input_field_placeholder="Choose a tool below 👇"
-)
+    ]
 
 # ================= HELPERS =================
 async def check_force_sub(user_id):
@@ -229,18 +290,19 @@ async def start(message: Message):
                 )
                 return
 
-            # Welcome message — no inline keyboard, only reply keyboard
-            await message.answer(
+            # Welcome message with colored inline buttons
+            styled_send(
+                message.chat.id,
                 "<b>💗 SPIDY MULTI TOOL BOT 💗</b>\n\n"
                 "🚀 Welcome to the Advanced Multi Tool Bot\n"
                 "━━━━━━━━━━━━━━━━━━━━\n"
-                "🔵 Number Lookup\n"
-                "🟢 TG to Number\n"
-                "🟠 Aadhar Info\n"
+                "📱 Number Lookup\n"
+                "🆔 TG to Number\n"
+                "📝 Aadhar Info\n"
                 "━━━━━━━━━━━━━━━━━━━━\n\n"
                 "⚡ Fast • Secure • Accurate\n\n"
                 "👇 Select an option below:",
-                reply_markup=kb
+                _main_menu_rows()
             )
 
         else:
@@ -264,71 +326,18 @@ async def cb_check_join(callback: CallbackQuery):
     ok = await check_force_sub(callback.from_user.id)
     if ok:
         total_users.add(callback.from_user.id)
-        # After joining, delete the inline message and send welcome with reply keyboard
-        try:
-            await callback.message.delete()
-        except:
-            pass
-        await bot.send_message(
+        styled_edit(
             callback.message.chat.id,
+            callback.message.message_id,
             "<b>💗 SPIDY MULTI TOOL BOT 💗</b>\n\n"
             "✅ Successfully joined! Welcome aboard!\n"
             "━━━━━━━━━━━━━━━━━━━━\n\n"
             "👇 Select an option below:",
-            reply_markup=kb
+            _main_menu_rows()
         )
         await callback.answer("✅ Access granted! Welcome!")
     else:
         await callback.answer("❌ You haven't joined yet! Please join first.", show_alert=True)
-
-# ================= REPLY KEYBOARD HANDLERS =================
-@dp.message(F.text == "🔵 Number Lookup")
-async def number_mode(message: Message):
-    ok = await check_force_sub(message.from_user.id)
-    if not ok:
-        styled_send(
-            message.chat.id,
-            "⚠️ <b>Access Required!</b>\n\nJoin the channel first.",
-            [
-                [{"text": "🔔 Join Channel", "url": f"https://t.me/{FORCE_CHANNEL.replace('@','')}"}],
-                [{"text": "✅ I Joined", "callback_data": "check_join", "style": "success"}]
-            ]
-        )
-        return
-    user_mode[message.from_user.id] = "number"
-    await message.answer("📱 Send mobile number (10 digits):")
-
-@dp.message(F.text == "🟢 TG to Number")
-async def tg_mode(message: Message):
-    ok = await check_force_sub(message.from_user.id)
-    if not ok:
-        styled_send(
-            message.chat.id,
-            "⚠️ <b>Access Required!</b>\n\nJoin the channel first.",
-            [
-                [{"text": "🔔 Join Channel", "url": f"https://t.me/{FORCE_CHANNEL.replace('@','')}"}],
-                [{"text": "✅ I Joined", "callback_data": "check_join", "style": "success"}]
-            ]
-        )
-        return
-    user_mode[message.from_user.id] = "tg"
-    await message.answer("🆔 Send Telegram user ID or @username:")
-
-@dp.message(F.text == "🟠 Aadhar Info")
-async def adhar_mode(message: Message):
-    ok = await check_force_sub(message.from_user.id)
-    if not ok:
-        styled_send(
-            message.chat.id,
-            "⚠️ <b>Access Required!</b>\n\nJoin the channel first.",
-            [
-                [{"text": "🔔 Join Channel", "url": f"https://t.me/{FORCE_CHANNEL.replace('@','')}"}],
-                [{"text": "✅ I Joined", "callback_data": "check_join", "style": "success"}]
-            ]
-        )
-        return
-    user_mode[message.from_user.id] = "adhar"
-    await message.answer("📝 Send Aadhar number:")
 
 # ================= COMMAND HANDLERS =================
 @dp.message(Command("num"))
@@ -734,7 +743,10 @@ async def handle_input(message: Message):
             if adm_mode == "set_num_api":
                 if text.startswith("http"):
                     NUMBER_API = text
-                    await message.answer(f"✅ <b>Number API updated!</b>\n\n<code>{html.escape(NUMBER_API)}</code>")
+                    save_config()
+                    render_ok = update_render_env("NUMBER_API", NUMBER_API)
+                    render_note = " • Render env updated ✅" if render_ok else ""
+                    await message.answer(f"✅ <b>Number API updated!{render_note}</b>\n\n<code>{html.escape(NUMBER_API)}</code>")
                 else:
                     await message.answer("❌ Invalid URL! Must start with http.")
                 admin_mode.pop(user_id, None)
@@ -751,7 +763,10 @@ async def handle_input(message: Message):
             elif adm_mode == "set_tg_api":
                 if text.startswith("http"):
                     TG_API = text
-                    await message.answer(f"✅ <b>TG API updated!</b>\n\n<code>{html.escape(TG_API)}</code>")
+                    save_config()
+                    render_ok = update_render_env("TG_API", TG_API)
+                    render_note = " • Render env updated ✅" if render_ok else ""
+                    await message.answer(f"✅ <b>TG API updated!{render_note}</b>\n\n<code>{html.escape(TG_API)}</code>")
                 else:
                     await message.answer("❌ Invalid URL! Must start with http.")
                 admin_mode.pop(user_id, None)
@@ -768,7 +783,10 @@ async def handle_input(message: Message):
             elif adm_mode == "set_adhar_api":
                 if text.startswith("http"):
                     ADHAR_API = text
-                    await message.answer(f"✅ <b>Aadhar API updated!</b>\n\n<code>{html.escape(ADHAR_API)}</code>")
+                    save_config()
+                    render_ok = update_render_env("ADHAR_API", ADHAR_API)
+                    render_note = " • Render env updated ✅" if render_ok else ""
+                    await message.answer(f"✅ <b>Aadhar API updated!{render_note}</b>\n\n<code>{html.escape(ADHAR_API)}</code>")
                 else:
                     await message.answer("❌ Invalid URL! Must start with http.")
                 admin_mode.pop(user_id, None)
