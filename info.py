@@ -5,7 +5,7 @@ import os
 from datetime import datetime
 from aiogram import Bot, Dispatcher, F
 from aiogram.types import (
-    Message, CallbackQuery
+    Message, CallbackQuery, ReplyKeyboardMarkup, KeyboardButton
 )
 from aiogram.filters import CommandStart, Command
 from aiogram.client.default import DefaultBotProperties
@@ -145,17 +145,20 @@ def styled_edit(chat_id, message_id, text, rows, parse_mode="HTML"):
     except Exception as e:
         print("styled_edit error:", e)
 
-# ================= MAIN MENU ROWS (colored inline buttons) =================
-def _main_menu_rows():
-    return [
+# ================= REPLY KEYBOARD =================
+kb = ReplyKeyboardMarkup(
+    keyboard=[
         [
-            {"text": "📱 Number Lookup", "callback_data": "mode_num", "style": "primary"},
-            {"text": "🆔 TG to Number",  "callback_data": "mode_tg",  "style": "success"}
+            KeyboardButton(text="📱 Number Lookup"),
+            KeyboardButton(text="🆔 TG to Number")
         ],
         [
-            {"text": "📝 Aadhar Info", "callback_data": "mode_adhar", "style": "danger"}
+            KeyboardButton(text="📝 Aadhar Info")
         ]
-    ]
+    ],
+    resize_keyboard=True,
+    input_field_placeholder="Ek option chuno 👇"
+)
 
 # ================= HELPERS =================
 async def check_force_sub(user_id):
@@ -290,9 +293,8 @@ async def start(message: Message):
                 )
                 return
 
-            # Welcome message with colored inline buttons
-            styled_send(
-                message.chat.id,
+            # Welcome message with reply keyboard
+            await message.answer(
                 "<b>💗 SPIDY MULTI TOOL BOT 💗</b>\n\n"
                 "🚀 Welcome to the Advanced Multi Tool Bot\n"
                 "━━━━━━━━━━━━━━━━━━━━\n"
@@ -301,8 +303,8 @@ async def start(message: Message):
                 "📝 Aadhar Info\n"
                 "━━━━━━━━━━━━━━━━━━━━\n\n"
                 "⚡ Fast • Secure • Accurate\n\n"
-                "👇 Select an option below:",
-                _main_menu_rows()
+                "👇 Niche se ek option chuno:",
+                reply_markup=kb
             )
 
         else:
@@ -326,18 +328,70 @@ async def cb_check_join(callback: CallbackQuery):
     ok = await check_force_sub(callback.from_user.id)
     if ok:
         total_users.add(callback.from_user.id)
-        styled_edit(
+        try:
+            await callback.message.delete()
+        except:
+            pass
+        await bot.send_message(
             callback.message.chat.id,
-            callback.message.message_id,
             "<b>💗 SPIDY MULTI TOOL BOT 💗</b>\n\n"
-            "✅ Successfully joined! Welcome aboard!\n"
+            "✅ Join ho gaye! Welcome aboard! 🎉\n"
             "━━━━━━━━━━━━━━━━━━━━\n\n"
-            "👇 Select an option below:",
-            _main_menu_rows()
+            "👇 Niche se ek option chuno:",
+            reply_markup=kb
         )
-        await callback.answer("✅ Access granted! Welcome!")
+        await callback.answer("✅ Access mil gaya! Welcome!")
     else:
         await callback.answer("❌ You haven't joined yet! Please join first.", show_alert=True)
+
+# ================= REPLY KEYBOARD HANDLERS =================
+@dp.message(F.text == "📱 Number Lookup")
+async def number_mode(message: Message):
+    ok = await check_force_sub(message.from_user.id)
+    if not ok:
+        styled_send(
+            message.chat.id,
+            "⚠️ <b>Pehle channel join karo!</b>",
+            [
+                [{"text": "🔔 Channel Join Karo", "url": f"https://t.me/{FORCE_CHANNEL.replace('@','')}"}],
+                [{"text": "✅ Join Ho Gaya", "callback_data": "check_join", "style": "success"}]
+            ]
+        )
+        return
+    user_mode[message.from_user.id] = "number"
+    await message.answer("📱 Mobile number bhejo (10 digits):")
+
+@dp.message(F.text == "🆔 TG to Number")
+async def tg_mode(message: Message):
+    ok = await check_force_sub(message.from_user.id)
+    if not ok:
+        styled_send(
+            message.chat.id,
+            "⚠️ <b>Pehle channel join karo!</b>",
+            [
+                [{"text": "🔔 Channel Join Karo", "url": f"https://t.me/{FORCE_CHANNEL.replace('@','')}"}],
+                [{"text": "✅ Join Ho Gaya", "callback_data": "check_join", "style": "success"}]
+            ]
+        )
+        return
+    user_mode[message.from_user.id] = "tg"
+    await message.answer("🆔 Telegram user ID ya @username bhejo:")
+
+@dp.message(F.text == "📝 Aadhar Info")
+async def adhar_mode(message: Message):
+    ok = await check_force_sub(message.from_user.id)
+    if not ok:
+        styled_send(
+            message.chat.id,
+            "⚠️ <b>Pehle channel join karo!</b>",
+            [
+                [{"text": "🔔 Channel Join Karo", "url": f"https://t.me/{FORCE_CHANNEL.replace('@','')}"}],
+                [{"text": "✅ Join Ho Gaya", "callback_data": "check_join", "style": "success"}]
+            ]
+        )
+        return
+    user_mode[message.from_user.id] = "adhar"
+    await message.answer("📝 Aadhar number bhejo:")
 
 # ================= COMMAND HANDLERS =================
 @dp.message(Command("num"))
