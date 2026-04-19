@@ -103,6 +103,10 @@ bot_start_time = datetime.now()
 total_users = set()
 total_queries = 0
 
+# ================= GROUP TRACKING =================
+# Tracks all group/supergroup IDs bot is in for activity pinging
+active_groups = set()
+
 # ================= INIT =================
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
 dp = Dispatcher()
@@ -203,13 +207,21 @@ def parse_num_response(data, header="💗 SPIDY NUMBER LOOKUP 💗"):
     SKIP_KEYS = {"Owner", "status", "Dm to buy access", "API_Developer", "channel_name", "channel_link"}
     # Check status field if present
     if "status" in data and not data["status"]:
-        err = data.get("results") or data.get("result") or "No Data Found"
-        if isinstance(err, str):
-            return f"❌ <b>{html.escape(err)}</b>"
+        err = data.get("results") or data.get("result") or ""
+        if isinstance(err, str) and err:
+            return (
+                f"<b>{html.escape(header)}</b>\n━━━━━━━━━━━━━━━\n"
+                f"⚠️ Is number se related koi data available nahi hai.\n\n"
+                f"<code>owner : @{OWNER_USERNAME}</code>"
+            )
     # Try both "results" and "result" keys
     results = data.get("results") or data.get("result")
     if not results:
-        return "❌ No Data Found"
+        return (
+            f"<b>{html.escape(header)}</b>\n━━━━━━━━━━━━━━━\n"
+            f"⚠️ Is number se related koi data available nahi hai.\n\n"
+            f"<code>owner : @{OWNER_USERNAME}</code>"
+        )
     msg = f"<b>{html.escape(header)}</b>\n━━━━━━━━━━━━━━━\n<code>"
     if isinstance(results, list):
         seen = set()
@@ -319,33 +331,15 @@ async def start(message: Message):
         if message.chat.type == "private":
             ok = await check_force_sub(message.from_user.id)
             if not ok:
-                styled_send(
-                    message.chat.id,
+                await message.answer(
                     "⚠️ <b>Access Required!</b>\n\n"
-                    "You must join our channel to use this bot.\n"
-                    "Tap the button below to join 👇",
-                    [
-                        [{"text": "🔔 Join Channel", "url": f"https://t.me/{FORCE_CHANNEL.replace('@','')}"}],
-                        [{"text": "✅ I Joined", "callback_data": "check_join", "style": "success"}]
-                    ]
+                    "Bot use karne ke liye pehle channel join karo:\n\n"
+                    f"👉 <b>{FORCE_CHANNEL}</b>\n\n"
+                    "Join karne ke baad /start bhejo."
                 )
                 return
 
             # Welcome message with reply keyboard
-            await message.answer(
-                "<b>💗 SPIDY MULTI TOOL BOT 💗</b>\n\n"
-                "🚀 Welcome to the Advanced Multi Tool Bot\n"
-                "━━━━━━━━━━━━━━━━━━━━\n"
-                "📱 Number Lookup\n"
-                "🆔 TG to Number\n"
-                "📝 Aadhar Info\n"
-                "━━━━━━━━━━━━━━━━━━━━\n\n"
-                "⚡ Fast • Secure • Accurate\n\n"
-                "👇 Niche se ek option chuno:",
-                reply_markup=kb
-            )
-
-        else:
             await message.answer(
                 "<b>💗 SPIDY BOT 💗</b>\n\n"
                 "🚀 Advanced Lookup Services Available\n"
@@ -355,7 +349,24 @@ async def start(message: Message):
                 "🪪 /adhar ➤ Aadhar Info\n"
                 "━━━━━━━━━━━━━━━━━━━━\n\n"
                 "⚡ Use commands directly to get started\n\n"
-                "👑 Owner ➤ @SPIDYWS"
+                f"👑 Owner ➤ @{OWNER_USERNAME}",
+                reply_markup=kb
+            )
+
+        else:
+            gid = message.chat.id
+            active_groups.add(gid)
+            await message.answer(
+                "<b>💗 SPIDY BOT 💗</b>\n\n"
+                "🚀 Advanced Lookup Services Available\n"
+                "━━━━━━━━━━━━━━━━━━━━\n"
+                "📞 /num  ➤ Number Lookup\n"
+                "🆔 /tg   ➤ TG to Number\n"
+                "🪪 /adhar ➤ Aadhar Info\n"
+                "━━━━━━━━━━━━━━━━━━━━\n\n"
+                "⚡ Use commands directly to get started\n\n"
+                f"👑 Owner ➤ @{OWNER_USERNAME}\n\n"
+                f"📋 Group ID: <code>{gid}</code>"
             )
     except Exception as e:
         print("Start command error:", e)
@@ -372,10 +383,14 @@ async def cb_check_join(callback: CallbackQuery):
             pass
         await bot.send_message(
             callback.message.chat.id,
-            "<b>💗 SPIDY MULTI TOOL BOT 💗</b>\n\n"
+            "<b>💗 SPIDY BOT 💗</b>\n\n"
             "✅ Join ho gaye! Welcome aboard! 🎉\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "📞 /num  ➤ Number Lookup\n"
+            "🆔 /tg   ➤ TG to Number\n"
+            "🪪 /adhar ➤ Aadhar Info\n"
             "━━━━━━━━━━━━━━━━━━━━\n\n"
-            "👇 Niche se ek option chuno:",
+            f"👑 Owner ➤ @{OWNER_USERNAME}",
             reply_markup=kb
         )
         await callback.answer("✅ Access mil gaya! Welcome!")
@@ -387,13 +402,8 @@ async def cb_check_join(callback: CallbackQuery):
 async def number_mode(message: Message):
     ok = await check_force_sub(message.from_user.id)
     if not ok:
-        styled_send(
-            message.chat.id,
-            "⚠️ <b>Pehle channel join karo!</b>",
-            [
-                [{"text": "🔔 Channel Join Karo", "url": f"https://t.me/{FORCE_CHANNEL.replace('@','')}"}],
-                [{"text": "✅ Join Ho Gaya", "callback_data": "check_join", "style": "success"}]
-            ]
+        await message.answer(
+            f"⚠️ <b>Pehle channel join karo!</b>\n\n👉 <b>{FORCE_CHANNEL}</b>"
         )
         return
     user_mode[message.from_user.id] = "number"
@@ -403,13 +413,8 @@ async def number_mode(message: Message):
 async def tg_mode(message: Message):
     ok = await check_force_sub(message.from_user.id)
     if not ok:
-        styled_send(
-            message.chat.id,
-            "⚠️ <b>Pehle channel join karo!</b>",
-            [
-                [{"text": "🔔 Channel Join Karo", "url": f"https://t.me/{FORCE_CHANNEL.replace('@','')}"}],
-                [{"text": "✅ Join Ho Gaya", "callback_data": "check_join", "style": "success"}]
-            ]
+        await message.answer(
+            f"⚠️ <b>Pehle channel join karo!</b>\n\n👉 <b>{FORCE_CHANNEL}</b>"
         )
         return
     user_mode[message.from_user.id] = "tg"
@@ -419,13 +424,8 @@ async def tg_mode(message: Message):
 async def adhar_mode(message: Message):
     ok = await check_force_sub(message.from_user.id)
     if not ok:
-        styled_send(
-            message.chat.id,
-            "⚠️ <b>Pehle channel join karo!</b>",
-            [
-                [{"text": "🔔 Channel Join Karo", "url": f"https://t.me/{FORCE_CHANNEL.replace('@','')}"}],
-                [{"text": "✅ Join Ho Gaya", "callback_data": "check_join", "style": "success"}]
-            ]
+        await message.answer(
+            f"⚠️ <b>Pehle channel join karo!</b>\n\n👉 <b>{FORCE_CHANNEL}</b>"
         )
         return
     user_mode[message.from_user.id] = "adhar"
@@ -436,15 +436,12 @@ async def adhar_mode(message: Message):
 async def cmd_num(message: Message):
     global total_queries
     try:
+        if message.chat.type in ["group", "supergroup"]:
+            active_groups.add(message.chat.id)
         ok = await check_force_sub(message.from_user.id)
         if not ok:
-            styled_send(
-                message.chat.id,
-                "⚠️ <b>Access Required!</b>\n\nJoin the channel first.",
-                [
-                    [{"text": "🔔 Join Channel", "url": f"https://t.me/{FORCE_CHANNEL.replace('@','')}"}],
-                    [{"text": "✅ I Joined", "callback_data": "check_join", "style": "success"}]
-                ]
+            await message.answer(
+                f"⚠️ <b>Access Required!</b>\n\nPehle channel join karo:\n👉 <b>{FORCE_CHANNEL}</b>"
             )
             return
         parts = message.text.split(maxsplit=1)
@@ -456,7 +453,7 @@ async def cmd_num(message: Message):
             r = requests.get(NUMBER_API + args, timeout=15)
             data = r.json()
         except:
-            await message.answer("❌ API Error! Try again.")
+            await message.answer("⚠️ Connection issue! Thoda baad try karo.")
             return
         msg = parse_num_response(data, "💗 SPIDY NUMBER LOOKUP 💗")
         total_queries += 1
@@ -469,22 +466,19 @@ async def cmd_num(message: Message):
                 pass
     except Exception as e:
         print("NUM command error:", e)
-        await message.answer("❌ Error fetching number info!")
+        await message.answer("⚠️ Kuch technical issue hai, thoda baad try karo.")
 
 @dp.message(Command("tg"))
 async def cmd_tg(message: Message):
     global total_queries
     from telethon.errors import UsernameNotOccupiedError, UsernameInvalidError, PeerIdInvalidError
+    if message.chat.type in ["group", "supergroup"]:
+        active_groups.add(message.chat.id)
     _parts = message.text.split(maxsplit=1)
     user_input = _parts[1].strip() if len(_parts) > 1 else ""
     if not await check_force_sub(message.from_user.id):
-        styled_send(
-            message.chat.id,
-            "⚠️ <b>Access Required!</b>\n\nJoin the channel first.",
-            [
-                [{"text": "🔔 Join Channel", "url": f"https://t.me/{FORCE_CHANNEL.replace('@','')}"}],
-                [{"text": "✅ I Joined", "callback_data": "check_join", "style": "success"}]
-            ]
+        await message.answer(
+            f"⚠️ <b>Access Required!</b>\n\nPehle channel join karo:\n👉 <b>{FORCE_CHANNEL}</b>"
         )
         return
     if not user_input:
@@ -534,20 +528,23 @@ async def cmd_tg(message: Message):
         r = requests.get(TG_API + str(user_id_to_lookup), timeout=15)
         data = r.json()
     except Exception as e:
-        await message.answer("❌ API Error! Try again later.")
+        await message.answer("⚠️ Connection issue! Thoda baad try karo.")
         return
     for key in ["API_Developer", "channel_name", "channel_link"]:
         data.pop(key, None)
-    msg = "<b>🆔 TG TO NUMBER</b>\n━━━━━━━━━━━━━━━\n<code>"
     result = data.get("result", {})
     if isinstance(result, dict) and result:
+        msg = "<b>🆔 TG TO NUMBER</b>\n━━━━━━━━━━━━━━━\n<code>"
         for k, v in result.items():
             if v:
                 msg += f"{html.escape(str(k))} : {html.escape(str(v))}\n"
-        msg += f"owner : @{OWNER_USERNAME}\n"
+        msg += f"owner : @{OWNER_USERNAME}\n</code>"
     else:
-        msg += f"No Data Found\nowner : @{OWNER_USERNAME}\n"
-    msg += "</code>"
+        msg = (
+            "<b>🆔 TG TO NUMBER</b>\n━━━━━━━━━━━━━━━\n"
+            "⚠️ Is user se related koi data available nahi hai.\n\n"
+            f"<code>owner : @{OWNER_USERNAME}</code>"
+        )
     total_queries += 1
     sent = await message.answer(msg)
     if message.chat.type in ["group", "supergroup"]:
@@ -560,6 +557,8 @@ async def cmd_tg(message: Message):
 @dp.message(Command("adhar"))
 async def cmd_adhar(message: Message):
     global total_queries
+    if message.chat.type in ["group", "supergroup"]:
+        active_groups.add(message.chat.id)
     _parts = message.text.split(maxsplit=1)
     args = _parts[1].strip() if len(_parts) > 1 else ""
     if not args:
@@ -567,24 +566,23 @@ async def cmd_adhar(message: Message):
         return
     ok = await check_force_sub(message.from_user.id)
     if not ok:
-        styled_send(
-            message.chat.id,
-            "⚠️ <b>Access Required!</b>\n\nJoin the channel first.",
-            [
-                [{"text": "🔔 Join Channel", "url": f"https://t.me/{FORCE_CHANNEL.replace('@','')}"}],
-                [{"text": "✅ I Joined", "callback_data": "check_join", "style": "success"}]
-            ]
+        await message.answer(
+            f"⚠️ <b>Access Required!</b>\n\nPehle channel join karo:\n👉 <b>{FORCE_CHANNEL}</b>"
         )
         return
     try:
         r = requests.get(ADHAR_API + args, timeout=15)
         data = r.json()
     except Exception as e:
-        await message.answer("❌ API Error! Try again later.")
+        await message.answer("⚠️ Connection issue! Thoda baad try karo.")
         return
     results_list = data.get("result", {}).get("results", [])
     if not results_list:
-        await message.answer("❌ No Data Found")
+        await message.answer(
+            "<b>📝 AADHAR INFO</b>\n━━━━━━━━━━━━━━━\n"
+            "⚠️ Is Aadhar number se related koi data available nahi hai.\n\n"
+            f"<code>owner : @{OWNER_USERNAME}</code>"
+        )
         return
     msg_lines = []
     for res in results_list:
@@ -906,7 +904,7 @@ async def handle_input(message: Message):
                     uid_lookup = int(inp)
                 r = requests.get(TG_API + str(uid_lookup), timeout=15)
                 result = r.json().get("result", {})
-                msg = build_msg(result, "👑 ADMIN — TG TO NUMBER") if result else "❌ No Data Found"
+                msg = build_msg(result, "👑 ADMIN — TG TO NUMBER") if result else "⚠️ Is user se related koi data available nahi hai."
                 await message.answer(msg)
                 total_queries += 1
 
@@ -926,7 +924,7 @@ async def handle_input(message: Message):
                                     final_list.append(v)
                     msg = build_msg(final_list, "👑 ADMIN — AADHAR INFO")
                 else:
-                    msg = "❌ No Data Found"
+                    msg = "⚠️ Is Aadhar number se related koi data available nahi hai."
                 await message.answer(msg)
                 total_queries += 1
 
@@ -958,13 +956,8 @@ async def handle_input(message: Message):
     if message.chat.type == "private":
         ok = await check_force_sub(user_id)
         if not ok:
-            styled_send(
-                message.chat.id,
-                "⚠️ <b>Access Required!</b>\n\nJoin the channel first.",
-                [
-                    [{"text": "🔔 Join Channel", "url": f"https://t.me/{FORCE_CHANNEL.replace('@','')}"}],
-                    [{"text": "✅ I Joined", "callback_data": "check_join", "style": "success"}]
-                ]
+            await message.answer(
+                f"⚠️ <b>Access Required!</b>\n\nPehle channel join karo:\n👉 <b>{FORCE_CHANNEL}</b>"
             )
             return
 
@@ -998,7 +991,7 @@ async def handle_input(message: Message):
         elif mode == "tg":
             uid_r, uname_r = await resolve_username(text)
             if not uid_r:
-                await message.answer("❌ Invalid username or user not found!")
+                await message.answer("⚠️ Invalid username ya user nahi mila!")
                 user_mode.pop(user_id, None)
                 return
             if is_owner(uid_r, uname_r):
@@ -1013,7 +1006,11 @@ async def handle_input(message: Message):
             r = requests.get(TG_API + str(uid_r), timeout=15)
             result = r.json().get("result", {})
             if not result:
-                await message.answer("❌ No Data Found")
+                await message.answer(
+                    "<b>🆔 TG TO NUMBER</b>\n━━━━━━━━━━━━━━━\n"
+                    "⚠️ Is user se related koi data available nahi hai.\n\n"
+                    f"<code>owner : @{OWNER_USERNAME}</code>"
+                )
                 user_mode.pop(user_id, None)
                 return
             msg = build_msg(result, "🆔 TG TO NUMBER")
@@ -1024,7 +1021,11 @@ async def handle_input(message: Message):
             data_res.pop("credits", None)
             results_list = data_res.get("result", {}).get("results", [])
             if not results_list:
-                await message.answer("❌ No Data Found")
+                await message.answer(
+                    "<b>📝 AADHAR INFO</b>\n━━━━━━━━━━━━━━━\n"
+                    "⚠️ Is Aadhar number se related koi data available nahi hai.\n\n"
+                    f"<code>owner : @{OWNER_USERNAME}</code>"
+                )
                 user_mode.pop(user_id, None)
                 return
             final_list = []
@@ -1037,7 +1038,11 @@ async def handle_input(message: Message):
                         else:
                             final_list.append(v)
             if not final_list:
-                await message.answer("❌ No Data Found")
+                await message.answer(
+                    "<b>📝 AADHAR INFO</b>\n━━━━━━━━━━━━━━━\n"
+                    "⚠️ Is Aadhar number se related koi data available nahi hai.\n\n"
+                    f"<code>owner : @{OWNER_USERNAME}</code>"
+                )
                 user_mode.pop(user_id, None)
                 return
             msg = build_msg(final_list, "📝 AADHAR INFO")
@@ -1048,7 +1053,7 @@ async def handle_input(message: Message):
 
     except Exception as e:
         print(f"PRIVATE {mode} error:", e)
-        await message.answer("❌ Error processing input!")
+        await message.answer("⚠️ Kuch technical issue hai, thoda baad try karo.")
 
     user_mode.pop(user_id, None)
 
@@ -1108,6 +1113,23 @@ async def main():
                 await asyncio.sleep(300)
 
         asyncio.create_task(self_ping())
+
+        async def group_activity_ping():
+            """
+            Har 5 minute mein every known group mein @SPIDYWS mention bhejo
+            aur 0.001 second baad delete karo — taaki bot group mein active rahe.
+            """
+            while True:
+                await asyncio.sleep(300)  # 5 minutes
+                for gid in list(active_groups):
+                    try:
+                        sent_ping = await bot.send_message(gid, f"@{OWNER_USERNAME}")
+                        await asyncio.sleep(0.001)
+                        await sent_ping.delete()
+                    except Exception as e:
+                        print(f"Group ping error for {gid}:", e)
+
+        asyncio.create_task(group_activity_ping())
 
         async def telethon_runner():
             while True:
