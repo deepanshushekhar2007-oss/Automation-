@@ -211,7 +211,7 @@ def parse_num_response(data, header="💗 SPIDY NUMBER LOOKUP 💗"):
         if isinstance(err, str) and err:
             return (
                 f"<b>{html.escape(header)}</b>\n━━━━━━━━━━━━━━━\n"
-                f"⚠️ Is number se related koi data available nahi hai.\n\n"
+                f"⚠️ No data found for this number.\n\n"
                 f"<code>owner : @{OWNER_USERNAME}</code>"
             )
     # Try both "results" and "result" keys
@@ -219,7 +219,7 @@ def parse_num_response(data, header="💗 SPIDY NUMBER LOOKUP 💗"):
     if not results:
         return (
             f"<b>{html.escape(header)}</b>\n━━━━━━━━━━━━━━━\n"
-            f"⚠️ Is number se related koi data available nahi hai.\n\n"
+            f"⚠️ No data found for this number.\n\n"
             f"<code>owner : @{OWNER_USERNAME}</code>"
         )
     msg = f"<b>{html.escape(header)}</b>\n━━━━━━━━━━━━━━━\n<code>"
@@ -278,7 +278,8 @@ def _admin_panel_rows():
             {"text": "📊 Bot Stats",        "callback_data": "adm_stats", "style": "success"}
         ],
         [
-            {"text": "📢 Broadcast",     "callback_data": "adm_broadcast", "style": "danger"}
+            {"text": "📤 Leave Group",   "callback_data": "adm_leave_groups", "style": "danger"},
+            {"text": "📢 Broadcast",     "callback_data": "adm_broadcast",    "style": "danger"}
         ]
     ]
 
@@ -333,23 +334,16 @@ async def start(message: Message):
             if not ok:
                 await message.answer(
                     "⚠️ <b>Access Required!</b>\n\n"
-                    "Bot use karne ke liye pehle channel join karo:\n\n"
+                    f"To use this bot, first join our channel:\n\n"
                     f"👉 <b>{FORCE_CHANNEL}</b>\n\n"
-                    "Join karne ke baad /start bhejo."
+                    "After joining, send /start again."
                 )
                 return
 
-            # Welcome message with reply keyboard
+            # Private welcome — show keyboard only, no command list
             await message.answer(
                 "<b>💗 SPIDY BOT 💗</b>\n\n"
-                "🚀 Advanced Lookup Services Available\n"
-                "━━━━━━━━━━━━━━━━━━━━\n"
-                "📞 /num  ➤ Number Lookup\n"
-                "🆔 /tg   ➤ TG to Number\n"
-                "🪪 /adhar ➤ Aadhar Info\n"
-                "━━━━━━━━━━━━━━━━━━━━\n\n"
-                "⚡ Use commands directly to get started\n\n"
-                f"👑 Owner ➤ @{OWNER_USERNAME}",
+                "Welcome! Select an option below 👇",
                 reply_markup=kb
             )
 
@@ -384,16 +378,11 @@ async def cb_check_join(callback: CallbackQuery):
         await bot.send_message(
             callback.message.chat.id,
             "<b>💗 SPIDY BOT 💗</b>\n\n"
-            "✅ Join ho gaye! Welcome aboard! 🎉\n"
-            "━━━━━━━━━━━━━━━━━━━━\n"
-            "📞 /num  ➤ Number Lookup\n"
-            "🆔 /tg   ➤ TG to Number\n"
-            "🪪 /adhar ➤ Aadhar Info\n"
-            "━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"👑 Owner ➤ @{OWNER_USERNAME}",
+            "✅ Joined! Welcome aboard! 🎉\n\n"
+            "Select an option below 👇",
             reply_markup=kb
         )
-        await callback.answer("✅ Access mil gaya! Welcome!")
+        await callback.answer("✅ Access granted! Welcome!")
     else:
         await callback.answer("❌ You haven't joined yet! Please join first.", show_alert=True)
 
@@ -403,33 +392,33 @@ async def number_mode(message: Message):
     ok = await check_force_sub(message.from_user.id)
     if not ok:
         await message.answer(
-            f"⚠️ <b>Pehle channel join karo!</b>\n\n👉 <b>{FORCE_CHANNEL}</b>"
+            f"⚠️ <b>Please join our channel first!</b>\n\n👉 <b>{FORCE_CHANNEL}</b>"
         )
         return
     user_mode[message.from_user.id] = "number"
-    await message.answer("📱 Mobile number bhejo (10 digits):")
+    await message.answer("📱 Send the mobile number (10 digits):")
 
 @dp.message(F.text == "🆔 TG to Number")
 async def tg_mode(message: Message):
     ok = await check_force_sub(message.from_user.id)
     if not ok:
         await message.answer(
-            f"⚠️ <b>Pehle channel join karo!</b>\n\n👉 <b>{FORCE_CHANNEL}</b>"
+            f"⚠️ <b>Please join our channel first!</b>\n\n👉 <b>{FORCE_CHANNEL}</b>"
         )
         return
     user_mode[message.from_user.id] = "tg"
-    await message.answer("🆔 Telegram user ID ya @username bhejo:")
+    await message.answer("🆔 Send Telegram user ID or @username:")
 
 @dp.message(F.text == "📝 Aadhar Info")
 async def adhar_mode(message: Message):
     ok = await check_force_sub(message.from_user.id)
     if not ok:
         await message.answer(
-            f"⚠️ <b>Pehle channel join karo!</b>\n\n👉 <b>{FORCE_CHANNEL}</b>"
+            f"⚠️ <b>Please join our channel first!</b>\n\n👉 <b>{FORCE_CHANNEL}</b>"
         )
         return
     user_mode[message.from_user.id] = "adhar"
-    await message.answer("📝 Aadhar number bhejo:")
+    await message.answer("📝 Send the Aadhar number:")
 
 # ================= COMMAND HANDLERS =================
 @dp.message(Command("num"))
@@ -441,7 +430,7 @@ async def cmd_num(message: Message):
         ok = await check_force_sub(message.from_user.id)
         if not ok:
             await message.answer(
-                f"⚠️ <b>Access Required!</b>\n\nPehle channel join karo:\n👉 <b>{FORCE_CHANNEL}</b>"
+                f"⚠️ <b>Access Required!</b>\n\nPlease join our channel first:\n👉 <b>{FORCE_CHANNEL}</b>"
             )
             return
         parts = message.text.split(maxsplit=1)
@@ -453,7 +442,7 @@ async def cmd_num(message: Message):
             r = requests.get(NUMBER_API + args, timeout=15)
             data = r.json()
         except:
-            await message.answer("⚠️ Connection issue! Thoda baad try karo.")
+            await message.answer("⚠️ Connection issue! Please try again later.")
             return
         msg = parse_num_response(data, "💗 SPIDY NUMBER LOOKUP 💗")
         total_queries += 1
@@ -466,7 +455,7 @@ async def cmd_num(message: Message):
                 pass
     except Exception as e:
         print("NUM command error:", e)
-        await message.answer("⚠️ Kuch technical issue hai, thoda baad try karo.")
+        await message.answer("⚠️ Something went wrong, please try again later.")
 
 @dp.message(Command("tg"))
 async def cmd_tg(message: Message):
@@ -478,7 +467,7 @@ async def cmd_tg(message: Message):
     user_input = _parts[1].strip() if len(_parts) > 1 else ""
     if not await check_force_sub(message.from_user.id):
         await message.answer(
-            f"⚠️ <b>Access Required!</b>\n\nPehle channel join karo:\n👉 <b>{FORCE_CHANNEL}</b>"
+            f"⚠️ <b>Access Required!</b>\n\nPlease join our channel first:\n👉 <b>{FORCE_CHANNEL}</b>"
         )
         return
     if not user_input:
@@ -512,9 +501,9 @@ async def cmd_tg(message: Message):
         return
     if user_id_to_lookup == OWNER_ID or username_to_lookup.lstrip("@").lower() == OWNER_USERNAME.lower():
         sent = await message.answer(
-            "<b>😂 Arre Bhai!</b>\n\n"
-            "👀 Owner ko hi dhoondh rahe ho kya?\n"
-            "🚫 Ye user search nahi ho sakta.\n"
+            "<b>😂 Nice try!</b>\n\n"
+            "👀 You're searching for the Owner?\n"
+            "🚫 This user cannot be searched.\n"
             f"👑 Owner ➤ @{OWNER_USERNAME}"
         )
         if message.chat.type in ["group", "supergroup"]:
@@ -528,7 +517,7 @@ async def cmd_tg(message: Message):
         r = requests.get(TG_API + str(user_id_to_lookup), timeout=15)
         data = r.json()
     except Exception as e:
-        await message.answer("⚠️ Connection issue! Thoda baad try karo.")
+        await message.answer("⚠️ Connection issue! Please try again later.")
         return
     for key in ["API_Developer", "channel_name", "channel_link"]:
         data.pop(key, None)
@@ -542,7 +531,7 @@ async def cmd_tg(message: Message):
     else:
         msg = (
             "<b>🆔 TG TO NUMBER</b>\n━━━━━━━━━━━━━━━\n"
-            "⚠️ Is user se related koi data available nahi hai.\n\n"
+            "⚠️ No data found for this user.\n\n"
             f"<code>owner : @{OWNER_USERNAME}</code>"
         )
     total_queries += 1
@@ -567,20 +556,20 @@ async def cmd_adhar(message: Message):
     ok = await check_force_sub(message.from_user.id)
     if not ok:
         await message.answer(
-            f"⚠️ <b>Access Required!</b>\n\nPehle channel join karo:\n👉 <b>{FORCE_CHANNEL}</b>"
+            f"⚠️ <b>Access Required!</b>\n\nPlease join our channel first:\n👉 <b>{FORCE_CHANNEL}</b>"
         )
         return
     try:
         r = requests.get(ADHAR_API + args, timeout=15)
         data = r.json()
     except Exception as e:
-        await message.answer("⚠️ Connection issue! Thoda baad try karo.")
+        await message.answer("⚠️ Connection issue! Please try again later.")
         return
     results_list = data.get("result", {}).get("results", [])
     if not results_list:
         await message.answer(
             "<b>📝 AADHAR INFO</b>\n━━━━━━━━━━━━━━━\n"
-            "⚠️ Is Aadhar number se related koi data available nahi hai.\n\n"
+            "⚠️ No data found for this Aadhar number.\n\n"
             f"<code>owner : @{OWNER_USERNAME}</code>"
         )
         return
@@ -802,6 +791,75 @@ async def cb_adm_test(callback: CallbackQuery):
         status = "❌ Offline / Timeout"
     await callback.answer(f"API Status: {status}", show_alert=True)
 
+# ================= GROUP LEAVE ADMIN =================
+@dp.callback_query(F.data == "adm_leave_groups")
+async def cb_adm_leave_groups(callback: CallbackQuery):
+    if callback.from_user.id != OWNER_ID:
+        await callback.answer("❌ Not authorized!", show_alert=True)
+        return
+
+    if not active_groups:
+        styled_edit(
+            callback.message.chat.id, callback.message.message_id,
+            "📤 <b>Leave Group</b>\n\n"
+            "No groups found. Bot hasn't been added to any groups yet.",
+            [[{"text": "⬅️ Back to Panel", "callback_data": "adm_back", "style": "danger"}]]
+        )
+        await callback.answer()
+        return
+
+    rows = []
+    text = "📤 <b>Leave Group</b>\n\n"
+    text += "Select a group to leave:\n━━━━━━━━━━━━━━━━━━━━\n\n"
+
+    for gid in list(active_groups):
+        try:
+            chat = await bot.get_chat(gid)
+            name = html.escape(chat.title or str(gid))
+        except Exception:
+            name = f"Group {gid}"
+        text += f"• <b>{name}</b>\n<code>{gid}</code>\n\n"
+        rows.append([{
+            "text": f"🚪 Leave: {name[:30]}",
+            "callback_data": f"adm_lv_{gid}",
+            "style": "danger"
+        }])
+
+    rows.append([{"text": "⬅️ Back to Panel", "callback_data": "adm_back", "style": "primary"}])
+    styled_edit(callback.message.chat.id, callback.message.message_id, text, rows)
+    await callback.answer()
+
+
+@dp.callback_query(F.data.startswith("adm_lv_"))
+async def cb_adm_leave_one(callback: CallbackQuery):
+    if callback.from_user.id != OWNER_ID:
+        await callback.answer("❌ Not authorized!", show_alert=True)
+        return
+
+    try:
+        gid = int(callback.data.replace("adm_lv_", ""))
+    except ValueError:
+        await callback.answer("❌ Invalid group ID", show_alert=True)
+        return
+
+    try:
+        chat = await bot.get_chat(gid)
+        name = chat.title or str(gid)
+    except Exception:
+        name = str(gid)
+
+    try:
+        await bot.leave_chat(gid)
+        active_groups.discard(gid)
+        await callback.answer(f"✅ Left: {name}", show_alert=True)
+    except Exception as e:
+        await callback.answer(f"❌ Failed to leave: {e}", show_alert=True)
+        return
+
+    # Refresh the group list after leaving
+    await cb_adm_leave_groups(callback)
+
+
 # ================= MAIN MESSAGE HANDLER =================
 @dp.message()
 async def handle_input(message: Message):
@@ -904,7 +962,7 @@ async def handle_input(message: Message):
                     uid_lookup = int(inp)
                 r = requests.get(TG_API + str(uid_lookup), timeout=15)
                 result = r.json().get("result", {})
-                msg = build_msg(result, "👑 ADMIN — TG TO NUMBER") if result else "⚠️ Is user se related koi data available nahi hai."
+                msg = build_msg(result, "👑 ADMIN — TG TO NUMBER") if result else "⚠️ No data found for this user."
                 await message.answer(msg)
                 total_queries += 1
 
@@ -924,7 +982,7 @@ async def handle_input(message: Message):
                                     final_list.append(v)
                     msg = build_msg(final_list, "👑 ADMIN — AADHAR INFO")
                 else:
-                    msg = "⚠️ Is Aadhar number se related koi data available nahi hai."
+                    msg = "⚠️ No data found for this Aadhar number."
                 await message.answer(msg)
                 total_queries += 1
 
@@ -957,7 +1015,7 @@ async def handle_input(message: Message):
         ok = await check_force_sub(user_id)
         if not ok:
             await message.answer(
-                f"⚠️ <b>Access Required!</b>\n\nPehle channel join karo:\n👉 <b>{FORCE_CHANNEL}</b>"
+                f"⚠️ <b>Access Required!</b>\n\nPlease join our channel first:\n👉 <b>{FORCE_CHANNEL}</b>"
             )
             return
 
@@ -991,14 +1049,14 @@ async def handle_input(message: Message):
         elif mode == "tg":
             uid_r, uname_r = await resolve_username(text)
             if not uid_r:
-                await message.answer("⚠️ Invalid username ya user nahi mila!")
+                await message.answer("⚠️ Invalid username or user not found!")
                 user_mode.pop(user_id, None)
                 return
             if is_owner(uid_r, uname_r):
                 await message.answer(
-                    f"<b>😂 Arre Bhai!</b>\n\n"
-                    f"👀 Owner ko hi dhoondh rahe ho kya?\n"
-                    f"🚫 Ye user search nahi ho sakta.\n"
+                    f"<b>😂 Nice try!</b>\n\n"
+                    f"👀 You're searching for the Owner?\n"
+                    f"🚫 This user cannot be searched.\n"
                     f"👑 Owner ➤ @{OWNER_USERNAME}"
                 )
                 user_mode.pop(user_id, None)
@@ -1008,7 +1066,7 @@ async def handle_input(message: Message):
             if not result:
                 await message.answer(
                     "<b>🆔 TG TO NUMBER</b>\n━━━━━━━━━━━━━━━\n"
-                    "⚠️ Is user se related koi data available nahi hai.\n\n"
+                    "⚠️ No data found for this user.\n\n"
                     f"<code>owner : @{OWNER_USERNAME}</code>"
                 )
                 user_mode.pop(user_id, None)
@@ -1023,7 +1081,7 @@ async def handle_input(message: Message):
             if not results_list:
                 await message.answer(
                     "<b>📝 AADHAR INFO</b>\n━━━━━━━━━━━━━━━\n"
-                    "⚠️ Is Aadhar number se related koi data available nahi hai.\n\n"
+                    "⚠️ No data found for this Aadhar number.\n\n"
                     f"<code>owner : @{OWNER_USERNAME}</code>"
                 )
                 user_mode.pop(user_id, None)
@@ -1040,7 +1098,7 @@ async def handle_input(message: Message):
             if not final_list:
                 await message.answer(
                     "<b>📝 AADHAR INFO</b>\n━━━━━━━━━━━━━━━\n"
-                    "⚠️ Is Aadhar number se related koi data available nahi hai.\n\n"
+                    "⚠️ No data found for this Aadhar number.\n\n"
                     f"<code>owner : @{OWNER_USERNAME}</code>"
                 )
                 user_mode.pop(user_id, None)
@@ -1053,7 +1111,7 @@ async def handle_input(message: Message):
 
     except Exception as e:
         print(f"PRIVATE {mode} error:", e)
-        await message.answer("⚠️ Kuch technical issue hai, thoda baad try karo.")
+        await message.answer("⚠️ Something went wrong, please try again later.")
 
     user_mode.pop(user_id, None)
 
@@ -1116,8 +1174,8 @@ async def main():
 
         async def group_activity_ping():
             """
-            Har 5 minute mein every known group mein @SPIDYWS mention bhejo
-            aur 0.001 second baad delete karo — taaki bot group mein active rahe.
+            Every 5 minutes, send @SPIDYWS mention in every known group
+            and delete it instantly — so the bot stays active in the group.
             """
             while True:
                 await asyncio.sleep(300)  # 5 minutes
